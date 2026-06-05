@@ -1,0 +1,19 @@
+# If any dimension is larger...
+if window height > target: reduce window height
+if window width > target: reduce window width
+if buffer height > target:
+    #if window height > target: reduce window height
+    reduce buffer height
+if buffer width > target:
+    #if window width > target: reduce window height
+    reduce buffer width
+
+# If any dimension is smaller...
+if buffer height < target: increase buffer height
+if buffer width < target: increase buffer width
+if window height < target:
+    #if buffer height < target: increase buffer height
+    increase window height
+if window width < target:
+    #if buffer width < target: increase buffer width
+    increase window width
