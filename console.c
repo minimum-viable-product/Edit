@@ -1,51 +1,10 @@
-#include <windows.h>
-
-#ifdef _WIN32
-    #ifndef __GNUC__
-        #pragma comment(lib, "user32")
-    #endif
-#endif
+#include "console.h"
+#include "handlers.c"
 
 
+HANDLE g_original_output_handle;
 HANDLE g_console_output_handle;
 HANDLE g_console_input_handle;
-
-
-enum {
-    BLACK_FG,
-    BLUE_FG,
-    GREEN_FG,
-    AQUA_FG,
-    RED_FG,
-    PURPLE_FG,
-    YELLOW_FG,
-    WHITE_FG,
-    GRAY_FG,
-    LIGHT_BLUE_FG,
-    LIGHT_GREEN_FG,
-    LIGHT_AQUA_FG,
-    LIGHT_RED_FG,
-    LIGHT_PURPLE_FG,
-    LIGHT_YELLOW_FG,
-    BRIGHT_WHITE_FG,
-
-    BLACK_BG=0,
-    BLUE_BG=16,
-    GREEN_BG=32,
-    AQUA_BG=48,
-    RED_BG=64,
-    PURPLE_BG=80,
-    YELLOW_BG=96,
-    WHITE_BG=112,
-    GRAY_BG=128,
-    LIGHT_BLUE_BG=144,
-    LIGHT_GREEN_BG=160,
-    LIGHT_AQUA_BG=176,
-    LIGHT_RED_BG=192,
-    LIGHT_PURPLE_BG=208,
-    LIGHT_YELLOW_BG=224,
-    BRIGHT_WHITE_BG=240
-};
 
 
 void display_error(char * title)
@@ -143,7 +102,6 @@ BOOL WINAPI ctrl_handler(DWORD ctrl_type)
 {
     switch (ctrl_type) {
         case CTRL_C_EVENT:
-            Beep(1000, 1000);
             return TRUE;
         case CTRL_CLOSE_EVENT:
             return TRUE;
@@ -155,6 +113,12 @@ BOOL WINAPI ctrl_handler(DWORD ctrl_type)
 
 void initialize_console(void)
 {
+    if ((g_original_output_handle = GetStdHandle(STD_OUTPUT_HANDLE))
+            == INVALID_HANDLE_VALUE)
+    {
+        display_error("GetStdHandle(STD_OUTPUT_HANDLE)");
+    }
+
     if ((g_console_output_handle = CreateConsoleScreenBuffer(
             GENERIC_READ | GENERIC_WRITE,
             0,
@@ -169,13 +133,13 @@ void initialize_console(void)
 
     /* Make screen buffer active / visible */
     if (! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
-        display_error("SetConsoleActiveScreenBuffer");
+        display_error("SetConsoleActiveScreenBuffer(g_console_output_handle)");
     }
 
     if ((g_console_input_handle = GetStdHandle(STD_INPUT_HANDLE))
             == INVALID_HANDLE_VALUE)
     {
-        display_error("GetStdHandle");
+        display_error("GetStdHandle(STD_INPUT_HANDLE)");
     }
 
     if (! FlushConsoleInputBuffer(g_console_input_handle)) {
@@ -195,6 +159,14 @@ void initialize_console(void)
 }
 
 
+void set_bg_color(enum colors color)
+{
+    if (! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
+        display_error("SetConsoleTextAttribute");
+    }
+}
+
+
 void set_cursor_position(const short row, const short col)
 {
     COORD coord;
@@ -207,10 +179,32 @@ void set_cursor_position(const short row, const short col)
 }
 
 
-void write_console_color(unsigned short * attributes,
-                         const short row,
-                         const short col,
-                         const unsigned long length)
+void read_color_at(const short row,
+                    const short col,
+                    unsigned short * attribute_buffer,
+                    const unsigned long length)
+{
+    DWORD cells_read_count;
+    COORD coord;
+    coord.X = col;
+    coord.Y = row;
+
+    if (! ReadConsoleOutputAttribute(
+            g_console_output_handle,
+            attribute_buffer,
+            length,
+            coord,
+            &cells_read_count))
+    {
+        display_error("ReadConsoleOutputAttribute");
+    }
+}
+
+
+void write_color_at(const short row,
+                    const short col,
+                    unsigned short * attribute_buffer,
+                    const unsigned long length)
 {
     DWORD cells_written_count;
     COORD coord;
@@ -219,7 +213,7 @@ void write_console_color(unsigned short * attributes,
 
     if (! WriteConsoleOutputAttribute(
             g_console_output_handle,
-            attributes,
+            attribute_buffer,
             length,
             coord,
             &cells_written_count))
@@ -229,10 +223,11 @@ void write_console_color(unsigned short * attributes,
 }
 
 
-void write_console(char * string)
+void write_at(const short row, const short col, const char * string)
 {
     DWORD characters_written_count;
 
+    set_cursor_position(row, col);
     if (! WriteConsole(
             g_console_output_handle,
             string,
@@ -240,22 +235,57 @@ void write_console(char * string)
             &characters_written_count,
             NULL))
     {
-        display_error("WriteConsole");
+        display_error("write_at() WriteConsole");
     }
 }
 
 
-void handle_key_event(const KEY_EVENT_RECORD * key_event)
+void console_log(const char * string)
 {
-    (void) key_event;
-    write_console("\nkey event\n");
+    DWORD characters_written_count;
+
+    if (! WriteConsole(
+            g_original_output_handle,
+            string,
+            (DWORD) lstrlen(string),
+            &characters_written_count,
+            NULL))
+    {
+        display_error("console_log() WriteConsole");
+    }
 }
 
 
-void handle_mouse_event(const MOUSE_EVENT_RECORD * mouse_event)
+int handle_key_event(const KEY_EVENT_RECORD * key_event)
 {
-    (void) mouse_event;
-    write_console("\nmouse event\n");
+    if (key_event->wVirtualKeyCode == VK_ESCAPE) {
+        return handle_key(KEY_ESCAPE);
+    }
+    else {
+        return 0;
+    }
+}
+
+
+int handle_mouse_event(const MOUSE_EVENT_RECORD * mouse_event)
+{
+    /*WORD attribute_buffer;
+
+    read_color_at(
+            mouse_event->dwMousePosition.Y,
+            mouse_event->dwMousePosition.X,
+            &attribute_buffer,
+            1
+    );
+    attribute_buffer ^= 255;
+    write_color_at(
+            mouse_event->dwMousePosition.Y,
+            mouse_event->dwMousePosition.X,
+            &attribute_buffer,
+            1
+    );*/
+
+    return handle_mouse();
 }
 
 
@@ -263,8 +293,9 @@ void loop_over_console_input(void)
 {
     INPUT_RECORD input_record;
     DWORD records_read_count;
+    int should_exit = 0;
 
-    while (TRUE) {
+    while (! should_exit) {
         if (! ReadConsoleInput(
                 g_console_input_handle,
                 &input_record,
@@ -276,10 +307,10 @@ void loop_over_console_input(void)
 
         switch(input_record.EventType) {
             case KEY_EVENT:
-                handle_key_event(&input_record.Event.KeyEvent);
+                should_exit = handle_key_event(&input_record.Event.KeyEvent);
                 break;
             case MOUSE_EVENT:
-                handle_mouse_event(&input_record.Event.MouseEvent);
+                should_exit = handle_mouse_event(&input_record.Event.MouseEvent);
                 break;
         }
     }
