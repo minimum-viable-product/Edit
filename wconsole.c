@@ -1,11 +1,17 @@
-#include "console.h"
-#include "handlers.c"
+/*#define _CRT_SECURE_NO_WARNINGS*/
+#include <windows.h>
+#include "wconsole.h"
+#include "input.h"
 
 
 HANDLE g_original_output_handle;
 HANDLE g_console_output_handle;
 HANDLE g_console_input_handle;
 
+
+/***********************************************************************
+    OUTPUT
+***********************************************************************/
 
 void display_error(char * title)
 {
@@ -19,10 +25,91 @@ void display_error(char * title)
                   0,
                   NULL);
 
-    MessageBox(NULL, lpMsgBuf, title, MB_OK | MB_ICONINFORMATION);
+    MessageBox(NULL, (LPCSTR) lpMsgBuf, title, MB_OK | MB_ICONINFORMATION);
     LocalFree(lpMsgBuf);
 }
 
+
+void write_console(HANDLE handle, const char * string)
+{
+    DWORD characters_written_count;
+
+    if (! WriteConsole(
+            handle,
+            string,
+            (DWORD) lstrlen(string),
+            &characters_written_count,
+            NULL))
+    {
+        display_error("WriteConsole");
+    }
+}
+
+
+void console_log(const char * string)
+{
+    write_console(g_original_output_handle, string);
+}
+
+
+void error_log(const char * string)
+{
+    write_console(GetStdHandle(STD_ERROR_HANDLE), string);
+}
+
+
+void set_bg_color(enum colors color)
+{
+    if (! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
+        display_error("SetConsoleTextAttribute");
+    }
+}
+
+
+void set_cursor_position(const short row, const short col)
+{
+    COORD coord;
+    coord.X = col;
+    coord.Y = row;
+
+    if (! SetConsoleCursorPosition(g_console_output_handle, coord)) {
+        display_error("SetConsoleCursorPosition");
+    }
+}
+
+
+void write_color_at(const short row,
+                    const short col,
+                    unsigned short attribute_buffer[],
+                    const unsigned long length)
+{
+    DWORD cells_written_count;
+    COORD coord;
+    coord.X = col;
+    coord.Y = row;
+
+    if (! WriteConsoleOutputAttribute(
+            g_console_output_handle,
+            attribute_buffer,
+            length,
+            coord,
+            &cells_written_count))
+    {
+        display_error("WriteConsoleOutputAttribute");
+    }
+}
+
+
+void write_at(const short row, const short col, const char * string)
+{
+    set_cursor_position(row, col);
+    write_console(g_console_output_handle, string);
+}
+
+
+/***********************************************************************
+    RESIZE
+***********************************************************************/
 
 void resize_console_buffer(const COORD buffer_size)
 {
@@ -30,7 +117,6 @@ void resize_console_buffer(const COORD buffer_size)
         display_error("SetConsoleScreenBufferSize");
     }
 }
-
 
 void resize_console_window(SMALL_RECT * window_rect)
 {
@@ -98,6 +184,10 @@ void resize_console(const short row_count, const short col_count)
 }
 
 
+/**********************************************************************
+    INIT
+**********************************************************************/
+
 BOOL WINAPI ctrl_handler(DWORD ctrl_type)
 {
     switch (ctrl_type) {
@@ -111,7 +201,7 @@ BOOL WINAPI ctrl_handler(DWORD ctrl_type)
 }
 
 
-void initialize_console(void)
+void initialize_console(const short row_count, const short col_count)
 {
     if ((g_original_output_handle = GetStdHandle(STD_OUTPUT_HANDLE))
             == INVALID_HANDLE_VALUE)
@@ -129,7 +219,7 @@ void initialize_console(void)
         display_error("CreateConsoleScreenBuffer");
     }
 
-    resize_console(25, 80);
+    resize_console(row_count, col_count);
 
     /* Make screen buffer active / visible */
     if (! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
@@ -159,30 +249,14 @@ void initialize_console(void)
 }
 
 
-void set_bg_color(enum colors color)
-{
-    if (! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
-        display_error("SetConsoleTextAttribute");
-    }
-}
-
-
-void set_cursor_position(const short row, const short col)
-{
-    COORD coord;
-    coord.X = col;
-    coord.Y = row;
-
-    if (! SetConsoleCursorPosition(g_console_output_handle, coord)) {
-        display_error("SetConsoleCursorPosition");
-    }
-}
-
+/**********************************************************************
+    INPUT
+**********************************************************************/
 
 void read_color_at(const short row,
-                    const short col,
-                    unsigned short * attribute_buffer,
-                    const unsigned long length)
+                   const short col,
+                   unsigned short attribute_buffer[],
+                   const unsigned long length)
 {
     DWORD cells_read_count;
     COORD coord;
@@ -201,117 +275,39 @@ void read_color_at(const short row,
 }
 
 
-void write_color_at(const short row,
-                    const short col,
-                    unsigned short * attribute_buffer,
-                    const unsigned long length)
+void get_console_input(struct input * p_input)
 {
-    DWORD cells_written_count;
-    COORD coord;
-    coord.X = col;
-    coord.Y = row;
-
-    if (! WriteConsoleOutputAttribute(
-            g_console_output_handle,
-            attribute_buffer,
-            length,
-            coord,
-            &cells_written_count))
-    {
-        display_error("WriteConsoleOutputAttribute");
-    }
-}
-
-
-void write_at(const short row, const short col, const char * string)
-{
-    DWORD characters_written_count;
-
-    set_cursor_position(row, col);
-    if (! WriteConsole(
-            g_console_output_handle,
-            string,
-            (DWORD) lstrlen(string),
-            &characters_written_count,
-            NULL))
-    {
-        display_error("write_at() WriteConsole");
-    }
-}
-
-
-void console_log(const char * string)
-{
-    DWORD characters_written_count;
-
-    if (! WriteConsole(
-            g_original_output_handle,
-            string,
-            (DWORD) lstrlen(string),
-            &characters_written_count,
-            NULL))
-    {
-        display_error("console_log() WriteConsole");
-    }
-}
-
-
-int handle_key_event(const KEY_EVENT_RECORD * key_event)
-{
-    if (key_event->wVirtualKeyCode == VK_ESCAPE) {
-        return handle_key(KEY_ESCAPE);
-    }
-    else {
-        return 0;
-    }
-}
-
-
-int handle_mouse_event(const MOUSE_EVENT_RECORD * mouse_event)
-{
-    /*WORD attribute_buffer;
-
-    read_color_at(
-            mouse_event->dwMousePosition.Y,
-            mouse_event->dwMousePosition.X,
-            &attribute_buffer,
-            1
-    );
-    attribute_buffer ^= 255;
-    write_color_at(
-            mouse_event->dwMousePosition.Y,
-            mouse_event->dwMousePosition.X,
-            &attribute_buffer,
-            1
-    );*/
-
-    return handle_mouse();
-}
-
-
-void loop_over_console_input(void)
-{
-    INPUT_RECORD input_record;
+    static INPUT_RECORD input_record;
+    KEY_EVENT_RECORD * p_key_event;
+    MOUSE_EVENT_RECORD * p_mouse_event;
     DWORD records_read_count;
-    int should_exit = 0;
 
-    while (! should_exit) {
-        if (! ReadConsoleInput(
-                g_console_input_handle,
-                &input_record,
-                1,
-                &records_read_count))
-        {
-            display_error("ReadConsoleInput");
-        }
+    if (! ReadConsoleInput(
+            g_console_input_handle,
+            &input_record,
+            1,
+            &records_read_count))
+    {
+        display_error("ReadConsoleInput");
+    }
 
-        switch(input_record.EventType) {
-            case KEY_EVENT:
-                should_exit = handle_key_event(&input_record.Event.KeyEvent);
-                break;
-            case MOUSE_EVENT:
-                should_exit = handle_mouse_event(&input_record.Event.MouseEvent);
-                break;
-        }
+    switch(input_record.EventType) {
+        case KEY_EVENT:
+            p_key_event = &input_record.Event.KeyEvent;
+            p_input->type = KEYBOARD;
+            p_input->device.keyboard.is_pressed = p_key_event->bKeyDown;
+            if (p_key_event->wVirtualKeyCode == VK_ESCAPE) {
+                p_input->device.keyboard.key = KEY_ESCAPE;
+            } else if (p_key_event->wVirtualKeyCode == VK_MENU) {
+                p_input->device.keyboard.key = KEY_ALT;
+            }
+            break;
+        case MOUSE_EVENT:
+            p_mouse_event = &input_record.Event.MouseEvent;
+            p_input->type = MOUSE;
+            p_input->device.mouse.row = p_mouse_event->dwMousePosition.Y;
+            p_input->device.mouse.col = p_mouse_event->dwMousePosition.X;
+            p_input->device.mouse.button = p_mouse_event->dwButtonState;
+            break;
     }
 }

@@ -8,8 +8,6 @@
     #endif
 #endif
 
-#include <windows.h>
-
 
 enum colors {
     BLACK_FG,
