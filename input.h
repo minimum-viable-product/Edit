@@ -2,13 +2,23 @@
 #define INPUT_H
 
 
-enum device_type { KEYBOARD, MOUSE };
-enum key { KEY_ESCAPE, KEY_ALT };
+enum device_type { IGNORED, KEYBOARD, MOUSE };
+enum key {
+    KEY_ESCAPE,
+    KEY_ALT,
+    KEY_ALT_F,
+    KEY_F,
+    KEY_E,
+    KEY_S,
+    KEY_V,
+    KEY_O,
+    KEY_H
+};
 
 
 struct keyboard {
     enum key key;
-    int is_pressed;
+    int key_is_pressed;
 };
 
 

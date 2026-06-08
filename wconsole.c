@@ -34,7 +34,7 @@ void write_console(HANDLE handle, const char * string)
 {
     DWORD characters_written_count;
 
-    if (! WriteConsole(
+    if ( ! WriteConsole(
             handle,
             string,
             (DWORD) lstrlen(string),
@@ -58,9 +58,19 @@ void error_log(const char * string)
 }
 
 
+void set_text_cursor_visibility(int is_visible)
+{
+    CONSOLE_CURSOR_INFO cursor_info;
+
+    GetConsoleCursorInfo(g_console_output_handle, &cursor_info);
+    cursor_info.bVisible = is_visible;
+    SetConsoleCursorInfo(g_console_output_handle, &cursor_info);
+}
+
+
 void set_bg_color(enum colors color)
 {
-    if (! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
+    if ( ! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
         display_error("SetConsoleTextAttribute");
     }
 }
@@ -72,7 +82,7 @@ void set_cursor_position(const short row, const short col)
     coord.X = col;
     coord.Y = row;
 
-    if (! SetConsoleCursorPosition(g_console_output_handle, coord)) {
+    if ( ! SetConsoleCursorPosition(g_console_output_handle, coord)) {
         display_error("SetConsoleCursorPosition");
     }
 }
@@ -88,7 +98,7 @@ void write_color_at(const short row,
     coord.X = col;
     coord.Y = row;
 
-    if (! WriteConsoleOutputAttribute(
+    if ( ! WriteConsoleOutputAttribute(
             g_console_output_handle,
             attribute_buffer,
             length,
@@ -113,14 +123,14 @@ void write_at(const short row, const short col, const char * string)
 
 void resize_console_buffer(const COORD buffer_size)
 {
-    if (! SetConsoleScreenBufferSize(g_console_output_handle, buffer_size)) {
+    if ( ! SetConsoleScreenBufferSize(g_console_output_handle, buffer_size)) {
         display_error("SetConsoleScreenBufferSize");
     }
 }
 
 void resize_console_window(SMALL_RECT * window_rect)
 {
-    if (! SetConsoleWindowInfo(g_console_output_handle, TRUE, window_rect)) {
+    if ( ! SetConsoleWindowInfo(g_console_output_handle, TRUE, window_rect)) {
         display_error("SetConsoleWindowInfo");
     }
 }
@@ -132,7 +142,7 @@ void resize_console(const short row_count, const short col_count)
     SMALL_RECT window_rect;
     COORD buffer_size;
 
-    if (! GetConsoleScreenBufferInfo(
+    if ( ! GetConsoleScreenBufferInfo(
             g_console_output_handle,
             &csbi))
     {
@@ -222,7 +232,7 @@ void initialize_console(const short row_count, const short col_count)
     resize_console(row_count, col_count);
 
     /* Make screen buffer active / visible */
-    if (! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
+    if ( ! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
         display_error("SetConsoleActiveScreenBuffer(g_console_output_handle)");
     }
 
@@ -232,18 +242,18 @@ void initialize_console(const short row_count, const short col_count)
         display_error("GetStdHandle(STD_INPUT_HANDLE)");
     }
 
-    if (! FlushConsoleInputBuffer(g_console_input_handle)) {
+    if ( ! FlushConsoleInputBuffer(g_console_input_handle)) {
         display_error("FlushConsoleInputBuffer");
     }
 
-    if (! SetConsoleMode(
+    if ( ! SetConsoleMode(
             g_console_input_handle,
             ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
     {
         display_error("SetConsoleMode");
     }
 
-    if (! SetConsoleCtrlHandler((PHANDLER_ROUTINE) ctrl_handler, TRUE)) {
+    if ( ! SetConsoleCtrlHandler((PHANDLER_ROUTINE) ctrl_handler, TRUE)) {
         display_error("SetConsoleCtrlHandler");
     }
 }
@@ -275,6 +285,14 @@ void read_color_at(const short row,
 }
 
 
+void flush_input(void)
+{
+    if ( ! FlushConsoleInputBuffer(g_console_input_handle)) {
+        display_error("FlushConsoleInputBuffer");
+    }
+}
+
+
 void get_console_input(struct input * p_input)
 {
     static INPUT_RECORD input_record;
@@ -295,13 +313,31 @@ void get_console_input(struct input * p_input)
         case KEY_EVENT:
             p_key_event = &input_record.Event.KeyEvent;
             p_input->type = KEYBOARD;
-            p_input->device.keyboard.is_pressed = p_key_event->bKeyDown;
-            if (p_key_event->wVirtualKeyCode == VK_ESCAPE) {
-                p_input->device.keyboard.key = KEY_ESCAPE;
-            } else if (p_key_event->wVirtualKeyCode == VK_MENU) {
-                p_input->device.keyboard.key = KEY_ALT;
+            p_input->device.keyboard.key_is_pressed = p_key_event->bKeyDown;
+            switch(p_key_event->wVirtualKeyCode) {
+                case VK_ESCAPE:
+                    p_input->device.keyboard.key = KEY_ESCAPE;
+                    break;
+                case VK_MENU:
+                    p_input->device.keyboard.key = KEY_ALT;
+                    break;
+                case 0x46:  /* F */
+                    if (p_key_event->bKeyDown) {
+                        if (p_key_event->dwControlKeyState
+                                == LEFT_ALT_PRESSED
+                            || p_key_event->dwControlKeyState
+                                == RIGHT_ALT_PRESSED)
+                        {
+                            p_input->device.keyboard.key = KEY_ALT_F;
+                        } else {
+                            p_input->device.keyboard.key = KEY_F;
+                        }
+                    }
+                    break;
+                default:
+                    p_input->type = IGNORED;
             }
-            break;
+            break;  /* KEY_EVENT */
         case MOUSE_EVENT:
             p_mouse_event = &input_record.Event.MouseEvent;
             p_input->type = MOUSE;
@@ -309,5 +345,7 @@ void get_console_input(struct input * p_input)
             p_input->device.mouse.col = p_mouse_event->dwMousePosition.X;
             p_input->device.mouse.button = p_mouse_event->dwButtonState;
             break;
+        default:
+            p_input->type = IGNORED;
     }
 }

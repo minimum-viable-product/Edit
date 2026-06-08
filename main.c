@@ -12,7 +12,6 @@ void create_bars(void)
     g_menubar.items = malloc(
             (size_t)g_menubar.item_count * sizeof(struct bar_item)
     );
-
     if (g_menubar.items != NULL) {
         g_menubar.items[0].text = "File";
         g_menubar.items[0].hint = "Commands for manipulating files";
@@ -59,7 +58,6 @@ void create_bars(void)
     g_statusbar.items = malloc(
             (size_t) g_statusbar.item_count * sizeof(struct bar_item)
     );
-
     if (g_statusbar.items != NULL) {
         g_statusbar.items[0].text = "F1=Help";
         g_statusbar.items[0].hint = "";
@@ -73,21 +71,6 @@ void create_bars(void)
 }
 
 
-void draw(struct bar * bar)
-{
-    unsigned short bg_color = WHITE_BG;
-    short i;
-
-    for (i=0; i < bar->item_count; ++i) {
-        write_at(bar->row, bar->items[i].col.first + 1, bar->items[i].text);
-    }
-
-    for (i=0; i < 80; ++i) {
-        write_color_at(bar->row, i, &bg_color, 1);
-    }
-}
-
-
 int main(void)
 {
     struct input input;
@@ -96,7 +79,7 @@ int main(void)
     create_bars();
     draw(&g_menubar);
     draw(&g_statusbar);
-    set_cursor_position(1, 0);  /* TODO: Set focus in editor window */
+    focus_editor();
 
     while(1) {
         get_console_input(&input);
@@ -107,6 +90,8 @@ int main(void)
             case MOUSE:
                 handle_mouse(&input.device.mouse);
                 break;
+            case IGNORED:  /* fall through */
+            default: break;
         }
     }
 

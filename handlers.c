@@ -1,5 +1,6 @@
 #include <limits.h>
 #include "input.h"
+#include "wconsole.h"
 
 
 struct command {
@@ -25,7 +26,89 @@ struct bar {
 } g_menubar, g_statusbar;
 
 
-void highlight_menubar_hotkeys(void)
+void draw(struct bar * b);
+void handle_mouse(struct mouse * m);
+void focus_editor(void);
+
+
+void (*handle_keyboard)(struct keyboard * k);
+short g_text_cursor_row = 1;
+short g_text_cursor_col = 0;
+
+
+void draw(struct bar * bar)
+{
+    unsigned short bg_color = WHITE_BG;
+    short i;
+
+    for (i=0; i < bar->item_count; ++i) {
+        write_at(bar->row, bar->items[i].col.first + 1, bar->items[i].text);
+    }
+
+    for (i=0; i < 80; ++i) {
+        write_color_at(bar->row, i, &bg_color, 1);
+    }
+}
+
+
+static void highlight_menu_title(struct bar_item * title)
+{
+    unsigned short attribute = WHITE_FG | BLACK_BG;
+    unsigned short attribute_bright = BRIGHT_WHITE_FG | BLACK_BG;
+    short i;
+
+    for (i=title->col.first; i <= title->col.last; ++i) {
+        write_color_at(0, i, &attribute, 1);
+    }
+
+    write_color_at(0, title->col.first + 1, &attribute_bright, 1);
+}
+
+
+static void menubar_focused(struct keyboard * keyboard)
+{
+    switch(keyboard->key) {
+        case KEY_ALT:
+            if ( ! keyboard->key_is_pressed) {
+                /* unfocus menubar */
+                draw(&g_menubar);
+                focus_editor();
+            }
+            break;
+        case KEY_ALT_F:
+            break;
+        case KEY_F:
+            break;
+        case KEY_E:
+            break;
+        case KEY_S:
+            break;
+        case KEY_V:
+            break;
+        case KEY_O:
+            break;
+        case KEY_H:
+            break;
+        case KEY_ESCAPE:
+            if (keyboard->key_is_pressed) {
+                /* unfocus menubar */
+                draw(&g_menubar);
+                focus_editor();
+            }
+            break;
+    }
+}
+
+
+static void focus_menubar(void)
+{
+    handle_keyboard = menubar_focused;
+    set_text_cursor_visibility(0);
+    highlight_menu_title(&g_menubar.items[0]);
+}
+
+
+static void highlight_menubar_hotkeys(void)
 {
     unsigned short foreground = BRIGHT_WHITE_FG | WHITE_BG;
     int i;
@@ -36,59 +119,53 @@ void highlight_menubar_hotkeys(void)
 }
 
 
-void alt_command(struct keyboard * keyboard)
-{
-    static int is_menu_active = 0;
-    static int are_menubar_hotkeys_bright = 0;
-
-    if (keyboard->is_pressed
-            && ! is_menu_active
-            && ! are_menubar_hotkeys_bright)
-    {
-        highlight_menubar_hotkeys();
-        are_menubar_hotkeys_bright = 1;
-    }
-}
-
-
-void invert_color(unsigned short attributes[], unsigned long length)
+/*static void invert_color(unsigned short attributes[], unsigned long length)
 {
     unsigned long i;
     for (i=0; i < length; ++i) {
         attributes[i] ^= 127;
     }
+}*/
+
+
+static void editor_focused(struct keyboard * keyboard)
+{
+    switch(keyboard->key) {
+        case KEY_ESCAPE:
+            if (keyboard->key_is_pressed) { exit(0); }
+            break;
+        case KEY_ALT:
+            if (keyboard->key_is_pressed) { highlight_menubar_hotkeys(); }
+            else { focus_menubar(); }  /* alt released */
+            break;
+        case KEY_ALT_F:
+            break;
+        case KEY_F:
+            break;
+        case KEY_E:
+            break;
+        case KEY_S:
+            break;
+        case KEY_V:
+            break;
+        case KEY_O:
+            break;
+        case KEY_H:
+            break;
+    }
 }
 
 
-void handle_keyboard(struct keyboard * keyboard)
+void focus_editor(void)
 {
-    if (keyboard->key == KEY_ESCAPE) {
-        exit(0);
-    } else if (keyboard->key == KEY_ALT) {
-        alt_command(keyboard);
-    }
+    flush_input();
+    handle_keyboard = editor_focused;
+    set_cursor_position(g_text_cursor_row, g_text_cursor_col);
+    set_text_cursor_visibility(1);
 }
 
 
 void handle_mouse(struct mouse * p_mouse)
 {
-    /*static short last_row = SHRT_MAX;
-    static short last_col = SHRT_MAX;
-    unsigned short attributes[2];
-
-    if (p_mouse->row != last_row || p_mouse->col != last_col)
-    {
-        read_color_at(last_row, last_col, attributes, 2);
-        invert_color(attributes, 1);
-        write_color_at(last_row, last_col, attributes, 2);
-
-        read_color_at(p_mouse->row, p_mouse->col, attributes, 2);
-        invert_color(attributes, 1);
-        write_color_at(p_mouse->row, p_mouse->col, attributes, 2);
-
-        last_row = p_mouse->row;
-        last_col = p_mouse->col;
-    }*/
-
-        (void) p_mouse;
+    (void) p_mouse;
 }
