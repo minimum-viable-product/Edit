@@ -3,8 +3,12 @@
 #include "wconsole.h"
 #include "input.h"
 
+#define SHOW_ERROR() display_error(__LINE__)
+
 
 HANDLE g_original_output_handle;
+DWORD  g_original_console_mode;
+TCHAR  g_original_console_title[256];
 HANDLE g_console_output_handle;
 HANDLE g_console_input_handle;
 
@@ -13,9 +17,10 @@ HANDLE g_console_input_handle;
     OUTPUT
 ***********************************************************************/
 
-void display_error(char * title)
+void display_error(const short line_number)
 {
     LPVOID lpMsgBuf;
+    TCHAR  title[32];
 
     FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
                   NULL,
@@ -25,6 +30,7 @@ void display_error(char * title)
                   0,
                   NULL);
 
+    wsprintf(title, "Line Number: %d", line_number);
     MessageBox(NULL, (LPCSTR) lpMsgBuf, title, MB_OK | MB_ICONINFORMATION);
     LocalFree(lpMsgBuf);
 }
@@ -41,7 +47,7 @@ void write_console(HANDLE handle, const char * string)
             &characters_written_count,
             NULL))
     {
-        display_error("WriteConsole");
+        SHOW_ERROR();
     }
 }
 
@@ -68,10 +74,10 @@ void set_text_cursor_visibility(int is_visible)
 }
 
 
-void set_bg_color(enum colors color)
+void set_color(enum colors color)
 {
     if ( ! SetConsoleTextAttribute(g_console_output_handle, (WORD) color)) {
-        display_error("SetConsoleTextAttribute");
+        SHOW_ERROR();
     }
 }
 
@@ -83,15 +89,15 @@ void set_cursor_position(const short row, const short col)
     coord.Y = row;
 
     if ( ! SetConsoleCursorPosition(g_console_output_handle, coord)) {
-        display_error("SetConsoleCursorPosition");
+        SHOW_ERROR();
     }
 }
 
 
-void write_color_at(const short row,
-                    const short col,
-                    unsigned short attribute_buffer[],
-                    const unsigned long length)
+void write_attributes_at(const short row,
+                         const short col,
+                         unsigned short attribute_buffer[],
+                         const unsigned long length)
 {
     DWORD cells_written_count;
     COORD coord;
@@ -105,7 +111,29 @@ void write_color_at(const short row,
             coord,
             &cells_written_count))
     {
-        display_error("WriteConsoleOutputAttribute");
+        SHOW_ERROR();
+    }
+}
+
+
+void write_characters_at(const short row,
+                         const short col,
+                         char character_buffer[],
+                         const unsigned long length)
+{
+    DWORD cells_written_count;
+    COORD coord;
+    coord.X = col;
+    coord.Y = row;
+
+    if ( ! WriteConsoleOutputCharacter(
+            g_console_output_handle,
+            character_buffer,
+            length,
+            coord,
+            &cells_written_count))
+    {
+        SHOW_ERROR();
     }
 }
 
@@ -124,14 +152,14 @@ void write_at(const short row, const short col, const char * string)
 void resize_console_buffer(const COORD buffer_size)
 {
     if ( ! SetConsoleScreenBufferSize(g_console_output_handle, buffer_size)) {
-        display_error("SetConsoleScreenBufferSize");
+        SHOW_ERROR();
     }
 }
 
 void resize_console_window(SMALL_RECT * window_rect)
 {
     if ( ! SetConsoleWindowInfo(g_console_output_handle, TRUE, window_rect)) {
-        display_error("SetConsoleWindowInfo");
+        SHOW_ERROR();
     }
 }
 
@@ -146,7 +174,7 @@ void resize_console(const short row_count, const short col_count)
             g_console_output_handle,
             &csbi))
     {
-        display_error("GetConsoleScreenBufferInfo");
+        SHOW_ERROR();
     }
 
     buffer_size = csbi.dwSize;
@@ -195,71 +223,6 @@ void resize_console(const short row_count, const short col_count)
 
 
 /**********************************************************************
-    INIT
-**********************************************************************/
-
-BOOL WINAPI ctrl_handler(DWORD ctrl_type)
-{
-    switch (ctrl_type) {
-        case CTRL_C_EVENT:
-            return TRUE;
-        case CTRL_CLOSE_EVENT:
-            return TRUE;
-        default:
-            return FALSE;
-    }
-}
-
-
-void initialize_console(const short row_count, const short col_count)
-{
-    if ((g_original_output_handle = GetStdHandle(STD_OUTPUT_HANDLE))
-            == INVALID_HANDLE_VALUE)
-    {
-        display_error("GetStdHandle(STD_OUTPUT_HANDLE)");
-    }
-
-    if ((g_console_output_handle = CreateConsoleScreenBuffer(
-            GENERIC_READ | GENERIC_WRITE,
-            0,
-            NULL,
-            CONSOLE_TEXTMODE_BUFFER,
-            NULL))  == INVALID_HANDLE_VALUE)
-    {
-        display_error("CreateConsoleScreenBuffer");
-    }
-
-    resize_console(row_count, col_count);
-
-    /* Make screen buffer active / visible */
-    if ( ! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
-        display_error("SetConsoleActiveScreenBuffer(g_console_output_handle)");
-    }
-
-    if ((g_console_input_handle = GetStdHandle(STD_INPUT_HANDLE))
-            == INVALID_HANDLE_VALUE)
-    {
-        display_error("GetStdHandle(STD_INPUT_HANDLE)");
-    }
-
-    if ( ! FlushConsoleInputBuffer(g_console_input_handle)) {
-        display_error("FlushConsoleInputBuffer");
-    }
-
-    if ( ! SetConsoleMode(
-            g_console_input_handle,
-            ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
-    {
-        display_error("SetConsoleMode");
-    }
-
-    if ( ! SetConsoleCtrlHandler((PHANDLER_ROUTINE) ctrl_handler, TRUE)) {
-        display_error("SetConsoleCtrlHandler");
-    }
-}
-
-
-/**********************************************************************
     INPUT
 **********************************************************************/
 
@@ -273,14 +236,14 @@ void read_color_at(const short row,
     coord.X = col;
     coord.Y = row;
 
-    if (! ReadConsoleOutputAttribute(
+    if ( ! ReadConsoleOutputAttribute(
             g_console_output_handle,
             attribute_buffer,
             length,
             coord,
             &cells_read_count))
     {
-        display_error("ReadConsoleOutputAttribute");
+        SHOW_ERROR();
     }
 }
 
@@ -288,7 +251,7 @@ void read_color_at(const short row,
 void flush_input(void)
 {
     if ( ! FlushConsoleInputBuffer(g_console_input_handle)) {
-        display_error("FlushConsoleInputBuffer");
+        SHOW_ERROR();
     }
 }
 
@@ -300,13 +263,13 @@ void get_console_input(struct input * p_input)
     MOUSE_EVENT_RECORD * p_mouse_event;
     DWORD records_read_count;
 
-    if (! ReadConsoleInput(
+    if ( ! ReadConsoleInput(
             g_console_input_handle,
             &input_record,
             1,
             &records_read_count))
     {
-        display_error("ReadConsoleInput");
+        SHOW_ERROR();
     }
 
     switch(input_record.EventType) {
@@ -348,4 +311,107 @@ void get_console_input(struct input * p_input)
         default:
             p_input->type = IGNORED;
     }
+}
+
+
+/**********************************************************************
+    INIT
+**********************************************************************/
+
+BOOL WINAPI ctrl_handler(DWORD ctrl_type)
+{
+    switch (ctrl_type) {
+        case CTRL_C_EVENT:
+            return TRUE;
+        case CTRL_CLOSE_EVENT:
+            return TRUE;
+        default:
+            return FALSE;
+    }
+}
+
+
+void restore_original_console(void)
+{
+    if ( ! SetConsoleCtrlHandler((PHANDLER_ROUTINE) ctrl_handler, FALSE)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleActiveScreenBuffer(g_original_output_handle)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleMode(g_original_output_handle, g_original_console_mode)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleTitle(g_original_console_title)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! FlushConsoleInputBuffer(GetStdHandle(STD_INPUT_HANDLE))) {
+        SHOW_ERROR();
+    }
+}
+
+
+void initialize_console(const short row_count, const short col_count)
+{
+    if ( ! GetConsoleTitle(g_original_console_title, 256)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleTitle("NT-CMD Editor")) {
+        SHOW_ERROR();
+    }
+
+    if ((g_original_output_handle = GetStdHandle(STD_OUTPUT_HANDLE))
+            == INVALID_HANDLE_VALUE)
+    {
+        SHOW_ERROR();
+    }
+
+    if ( ! GetConsoleMode(g_original_output_handle, &g_original_console_mode)) {
+        SHOW_ERROR();
+    }
+
+    if ((g_console_output_handle = CreateConsoleScreenBuffer(
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            NULL,
+            CONSOLE_TEXTMODE_BUFFER,
+            NULL)) == INVALID_HANDLE_VALUE)
+    {
+        SHOW_ERROR();
+    }
+
+    resize_console(row_count, col_count);
+
+    /* Make screen buffer active / visible */
+    if ( ! SetConsoleActiveScreenBuffer(g_console_output_handle)) {
+        SHOW_ERROR();
+    }
+
+    if ((g_console_input_handle = GetStdHandle(STD_INPUT_HANDLE))
+            == INVALID_HANDLE_VALUE)
+    {
+        SHOW_ERROR();
+    }
+
+    if ( ! FlushConsoleInputBuffer(g_console_input_handle)) {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleMode(
+            g_console_input_handle,
+            ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT))
+    {
+        SHOW_ERROR();
+    }
+
+    if ( ! SetConsoleCtrlHandler((PHANDLER_ROUTINE) ctrl_handler, TRUE)) {
+        SHOW_ERROR();
+    }
+
+    atexit(restore_original_console);
 }

@@ -4,7 +4,6 @@
 #ifdef _WIN32
     #ifndef __GNUC__
         #pragma comment(lib, "user32")
-        /*#pragma warning(disable : 4996)*/  /* _CRT_SECURE_NO_WARNINGS */
     #endif
 #endif
 

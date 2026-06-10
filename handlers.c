@@ -14,7 +14,7 @@ struct command {
 struct bar_item {
     const char * text;
     const char * hint;
-    struct { short first; short last; } col;
+    struct { short first; unsigned long length; } col;
     struct command * command;
 };
 
@@ -38,30 +38,50 @@ short g_text_cursor_col = 0;
 
 void draw(struct bar * bar)
 {
-    unsigned short bg_color = WHITE_BG;
+    unsigned short attributes[80];
+    char characters[80];
     short i;
 
+    for (i=0; i < 80; ++i) {
+        attributes[i] = WHITE_BG | BLACK_FG;
+    }
+    memset(characters, ' ', 80);
+
     for (i=0; i < bar->item_count; ++i) {
-        write_at(bar->row, bar->items[i].col.first + 1, bar->items[i].text);
+        memcpy(
+                &characters[bar->items[i].col.first + 1],
+                bar->items[i].text,
+                bar->items[i].col.length - 2
+        );
     }
 
-    for (i=0; i < 80; ++i) {
-        write_color_at(bar->row, i, &bg_color, 1);
-    }
+    write_characters_at(bar->row, 0, characters, 80);
+    write_attributes_at(bar->row, 0, attributes, 80);
+}
+
+
+void show_statusbar_hint(const char * string)
+{
+    char characters[80] = { ' ' };
+    size_t length = strlen(string);
+
+    memcpy(&characters[1], string, length);
+    memset(&characters[length + 1], ' ', 80 - length - 1);
+    write_characters_at(g_statusbar.row, 0, characters, 80);
 }
 
 
 static void highlight_menu_title(struct bar_item * title)
 {
-    unsigned short attribute = WHITE_FG | BLACK_BG;
-    unsigned short attribute_bright = BRIGHT_WHITE_FG | BLACK_BG;
-    short i;
+    unsigned short attributes[9];
+    unsigned int i;
 
-    for (i=title->col.first; i <= title->col.last; ++i) {
-        write_color_at(0, i, &attribute, 1);
+    read_color_at(0, title->col.first, attributes, title->col.length);
+    for (i=0; i < title->col.length; ++i) {
+        attributes[i] |= 0x77;
+        attributes[i] ^= 0x70;
     }
-
-    write_color_at(0, title->col.first + 1, &attribute_bright, 1);
+    write_attributes_at(0, title->col.first, attributes, title->col.length);
 }
 
 
@@ -76,6 +96,7 @@ static void menubar_focused(struct keyboard * keyboard)
             }
             break;
         case KEY_ALT_F:
+            console_log("\nmenubar: alt+f\n");
             break;
         case KEY_F:
             break;
@@ -105,40 +126,18 @@ static void focus_menubar(void)
     handle_keyboard = menubar_focused;
     set_text_cursor_visibility(0);
     highlight_menu_title(&g_menubar.items[0]);
+    show_statusbar_hint(g_menubar.items[0].hint);
 }
 
 
-static void highlight_menubar_hotkeys(void)
-{
-    unsigned short foreground = BRIGHT_WHITE_FG | WHITE_BG;
-    int i;
-
-    for (i=0; i < g_menubar.item_count; ++i) {
-        write_color_at(0, g_menubar.items[i].col.first + 1, &foreground, 1);
-    }
-}
-
-
-/*static void invert_color(unsigned short attributes[], unsigned long length)
-{
-    unsigned long i;
-    for (i=0; i < length; ++i) {
-        attributes[i] ^= 127;
-    }
-}*/
-
-
-static void editor_focused(struct keyboard * keyboard)
+static void menubar_prefocused(struct keyboard * keyboard)
 {
     switch(keyboard->key) {
-        case KEY_ESCAPE:
-            if (keyboard->key_is_pressed) { exit(0); }
-            break;
         case KEY_ALT:
-            if (keyboard->key_is_pressed) { highlight_menubar_hotkeys(); }
-            else { focus_menubar(); }  /* alt released */
+            if ( ! keyboard->key_is_pressed) { focus_menubar(); }
             break;
         case KEY_ALT_F:
+            console_log("\npre-menubar: alt+f\n");
             break;
         case KEY_F:
             break;
@@ -152,6 +151,38 @@ static void editor_focused(struct keyboard * keyboard)
             break;
         case KEY_H:
             break;
+        default: break;
+    }
+}
+
+
+static void highlight_menubar_hotkeys(void)  /* TODO: Optimize */
+{
+    unsigned short foreground = BRIGHT_WHITE_FG | WHITE_BG;
+    int i;
+
+    for (i=0; i < g_menubar.item_count; ++i) {
+        write_attributes_at(
+                0,
+                g_menubar.items[i].col.first + 1,
+                &foreground,
+                1
+        );
+    }
+}
+
+
+static void editor_focused(struct keyboard * keyboard)
+{
+    switch(keyboard->key) {
+        case KEY_ESCAPE:
+            if (keyboard->key_is_pressed) { exit(0); }
+            break;
+        case KEY_ALT:
+            if (keyboard->key_is_pressed) { highlight_menubar_hotkeys(); }
+            handle_keyboard = menubar_prefocused;
+            break;
+        default: break;
     }
 }
 
