@@ -256,6 +256,9 @@ void flush_input(void)
 }
 
 
+/**
+ * Read input from the console.
+ */
 void get_console_input(struct input * p_input)
 {
     static INPUT_RECORD input_record;
@@ -281,21 +284,13 @@ void get_console_input(struct input * p_input)
                 case VK_ESCAPE:
                     p_input->device.keyboard.key = KEY_ESCAPE;
                     break;
-                case VK_MENU:
-                    p_input->device.keyboard.key = KEY_ALT;
-                    break;
                 case 0x46:  /* F */
                     if (p_key_event->bKeyDown) {
-                        if (p_key_event->dwControlKeyState
-                                == LEFT_ALT_PRESSED
-                            || p_key_event->dwControlKeyState
-                                == RIGHT_ALT_PRESSED)
-                        {
-                            p_input->device.keyboard.key = KEY_ALT_F;
-                        } else {
-                            p_input->device.keyboard.key = KEY_F;
-                        }
+                        p_input->device.keyboard.key = KEY_F;
                     }
+                    break;
+                case VK_MENU:
+                    p_input->device.keyboard.key = KEY_ALT;
                     break;
                 default:
                     p_input->type = IGNORED;

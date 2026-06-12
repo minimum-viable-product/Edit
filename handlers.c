@@ -3,29 +3,6 @@
 #include "wconsole.h"
 
 
-struct command {
-    const char * text;
-    const char * hint;
-    int    hotkey_position;
-    int    (*command)(void);
-};
-
-
-struct bar_item {
-    const char * text;
-    const char * hint;
-    struct { short first; unsigned long length; } col;
-    struct command * command;
-};
-
-
-struct bar {
-    short row;
-    short item_count;
-    struct bar_item * items;
-} g_menubar, g_statusbar;
-
-
 void draw(struct bar * b);
 void handle_mouse(struct mouse * m);
 void focus_editor(void);
@@ -95,10 +72,8 @@ static void menubar_focused(struct keyboard * keyboard)
                 focus_editor();
             }
             break;
-        case KEY_ALT_F:
-            console_log("\nmenubar: alt+f\n");
-            break;
         case KEY_F:
+            console_log("\nmenubar: f\n");
             break;
         case KEY_E:
             break;
@@ -136,10 +111,8 @@ static void menubar_prefocused(struct keyboard * keyboard)
         case KEY_ALT:
             if ( ! keyboard->key_is_pressed) { focus_menubar(); }
             break;
-        case KEY_ALT_F:
-            console_log("\npre-menubar: alt+f\n");
-            break;
         case KEY_F:
+            console_log("\npre-menubar: f\n");
             break;
         case KEY_E:
             break;
