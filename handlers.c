@@ -1,19 +1,16 @@
 #include <limits.h>
+
 #include "input.h"
 #include "wconsole.h"
+#include "menus.h"
+#include "handlers.h"
 
 
-void draw(struct bar * b);
-void handle_mouse(struct mouse * m);
-void focus_editor(void);
-
-
-void (*handle_keyboard)(struct keyboard * k);
 short g_text_cursor_row = 1;
 short g_text_cursor_col = 0;
 
 
-void draw(struct bar * bar)
+void draw(const struct bar * bar)
 {
     unsigned short attributes[80];
     char characters[80];
@@ -48,7 +45,7 @@ void show_statusbar_hint(const char * string)
 }
 
 
-static void highlight_menu_title(struct bar_item * title)
+static void highlight_menu_title(const struct bar_item * title)
 {
     unsigned short attributes[9];
     unsigned int i;
@@ -62,9 +59,42 @@ static void highlight_menu_title(struct bar_item * title)
 }
 
 
+void menu_focused(struct keyboard * keyboard)
+{
+    switch (keyboard->key) {
+        case KEY_ESCAPE:
+            if (keyboard->key_is_pressed) {
+                /* unfocus menu */
+                /*unpaint_menu*/
+                draw(&g_menubar);
+                focus_editor();
+            }
+            break;
+        default: break;
+    }
+}
+
+
+static void focus_menu(enum menubar_items menu)
+{
+    char character_buffer[512];
+
+    memset(character_buffer, ' ', 512);
+    build_menu(menu, character_buffer);
+    draw_window_at(
+            1,  /* row */
+            g_menubar.items[menu].col.first - 1,  /* col */
+            character_buffer,
+            g_menubar.items[menu].menu.command_count + 2,  /* row count */
+            g_menubar.items[menu].menu.width  /* column count */
+    );
+    handle_keyboard = menu_focused;
+}
+
+
 static void menubar_focused(struct keyboard * keyboard)
 {
-    switch(keyboard->key) {
+    switch (keyboard->key) {
         case KEY_ALT:
             if ( ! keyboard->key_is_pressed) {
                 /* unfocus menubar */
@@ -73,7 +103,7 @@ static void menubar_focused(struct keyboard * keyboard)
             }
             break;
         case KEY_F:
-            console_log("\nmenubar: f\n");
+            focus_menu(FILE_MENU);
             break;
         case KEY_E:
             break;
@@ -100,19 +130,19 @@ static void focus_menubar(void)
 {
     handle_keyboard = menubar_focused;
     set_text_cursor_visibility(0);
-    highlight_menu_title(&g_menubar.items[0]);
-    show_statusbar_hint(g_menubar.items[0].hint);
+    highlight_menu_title(&g_menubar.items[FILE_MENU]);
+    show_statusbar_hint(g_menubar.items[FILE_MENU].hint);
 }
 
 
 static void menubar_prefocused(struct keyboard * keyboard)
 {
-    switch(keyboard->key) {
+    switch (keyboard->key) {
         case KEY_ALT:
             if ( ! keyboard->key_is_pressed) { focus_menubar(); }
             break;
         case KEY_F:
-            console_log("\npre-menubar: f\n");
+            focus_menu(FILE_MENU);
             break;
         case KEY_E:
             break;
@@ -147,7 +177,7 @@ static void highlight_menubar_hotkeys(void)  /* TODO: Optimize */
 
 static void editor_focused(struct keyboard * keyboard)
 {
-    switch(keyboard->key) {
+    switch (keyboard->key) {
         case KEY_ESCAPE:
             if (keyboard->key_is_pressed) { exit(0); }
             break;

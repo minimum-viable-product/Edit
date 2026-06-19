@@ -3,6 +3,8 @@
 
 
 enum device_type { IGNORED, KEYBOARD, MOUSE };
+
+
 enum key {
     KEY_ESCAPE,
     KEY_ALT,

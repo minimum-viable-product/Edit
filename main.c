@@ -1,7 +1,9 @@
 #include "input.h"
+#include "menus.h"
+
 #include "wconsole.c"
-#include "menus.c"
 #include "handlers.c"
+#include "menus.c"
 
 
 int main(void)
@@ -9,7 +11,6 @@ int main(void)
     struct input input;
 
     initialize_console(25, 80);
-    /*create_bars();*/
     draw(&g_menubar);
     draw(&g_statusbar);
     focus_editor();

@@ -1,4 +1,4 @@
-/*#define _CRT_SECURE_NO_WARNINGS*/
+#define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include "wconsole.h"
 #include "input.h"
@@ -11,11 +11,18 @@ DWORD  g_original_console_mode;
 TCHAR  g_original_console_title[256];
 HANDLE g_console_output_handle;
 HANDLE g_console_input_handle;
+struct {
+    CHAR_INFO buffer[4096];  /* 80 x 50 */
+    COORD col_row_size;
+    COORD upper_left_cell;
+    SMALL_RECT region;
+} g_original_screen_contents;
 
 
 /***********************************************************************
     OUTPUT
 ***********************************************************************/
+
 
 void display_error(const short line_number)
 {
@@ -144,10 +151,114 @@ void write_at(const short row, const short col, const char * string)
     write_console(g_console_output_handle, string);
 }
 
+#if 0
+    void save_screen_at(short row, short col, struct menu * menu)
+    {
+        TCHAR characters[26];
+        int i, j;
+
+        g_original_screen_contents.col_row_size.X = 80;
+        g_original_screen_contents.col_row_size.Y = 50;
+        g_original_screen_contents.left_upper_cell.X = 0;
+        g_original_screen_contents.left_upper_cell.Y = 0;
+        g_original_screen_contents.region = {
+            col,
+            row,
+            menu->width,
+            menu->command_count
+        };
+
+        ReadConsoleOutput(
+                g_console_output_handle,
+                &g_original_screen_contents.buffer,
+                g_original_screen_contents.col_row_size,
+                g_original_screen_contents.left_upper_cell,
+                &g_original_screen_contents.region
+        );
+
+        /* Print menu's top line */
+        if (menu->command_count > 0) {
+            characters[0] = '\xDA';
+            for (j=1; j < menu->width - 1; ++j) {
+                characters[j] = '\xC4';
+            }
+            characters[] = '\xBF';
+        }
+
+        for (i=0; i < menu->command_count; ++i) {
+
+        }
+
+        WriteConsoleOutput(
+                g_console_output_handle,
+                &char_info,
+                destination_buffer_size,
+                destination_buffer_upper_left,
+                &region
+        );
+    }
+#endif
+
+void draw_window_at(const short row,
+                     const short col,
+                     TCHAR * character_buffer,
+                     const short row_count,
+                     const short col_count)
+{
+    CHAR_INFO char_info[4096];
+    COORD buffer_col_row_size;
+    COORD buffer_left_upper_cell = { 0, 0 };
+    SMALL_RECT region;
+    int i;
+
+    buffer_col_row_size.X = col_count;
+    buffer_col_row_size.Y = row_count;
+
+    region.Left = row;
+    region.Top  = col;
+    region.Right  = col_count;
+    region.Bottom = row_count;
+
+    for (i=0; i < row_count * col_count; ++i) {
+        char_info[i].Char.AsciiChar = character_buffer[i];
+        char_info[i].Attributes = WHITE_BG | BLACK_FG;
+    }
+
+    WriteConsoleOutput(
+            g_console_output_handle,
+            char_info,
+            buffer_col_row_size,
+            buffer_left_upper_cell,
+            &region
+    );
+}
+
+
+/*void erase_window_at(short row, short col, struct menu * menu)
+{
+    g_original_screen_contents.col_row_size = { 80, 50 };
+    g_original_screen_contents.left_upper_cell = { 0, 0 };
+    g_original_screen_contents.region = {
+        col,
+        row,
+        menu->width,
+        menu->command_count
+    };
+
+    WriteConsoleOutput(
+            g_console_output_handle,
+            &char_info,
+            destination_buffer_size,
+            destination_buffer_upper_left,
+            &region
+    );
+}*/
+
 
 /***********************************************************************
     RESIZE
 ***********************************************************************/
+
 
 void resize_console_buffer(const COORD buffer_size)
 {
@@ -225,6 +336,7 @@ void resize_console(const short row_count, const short col_count)
 /**********************************************************************
     INPUT
 **********************************************************************/
+
 
 void read_color_at(const short row,
                    const short col,
@@ -312,6 +424,7 @@ void get_console_input(struct input * p_input)
 /**********************************************************************
     INIT
 **********************************************************************/
+
 
 BOOL WINAPI ctrl_handler(DWORD ctrl_type)
 {
